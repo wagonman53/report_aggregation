@@ -1,12 +1,17 @@
 import pandas as pd
 
-def get_action_columns(df):
-    keywords = ["BET","RAISE","CALL","FOLD","CHECK"]
+rank_list = ["straight flush","4 Cards","full house","flush","straight","3 Cards","2 pairs","over pair","top pair(GK)","top pair(LK)","middle pair","low pair","noting"]
+eqb_list = ["EQB"]
+exclude_list = rank_list + eqb_list
+
+def get_action_columns(df, exclude_keywords=exclude_list):
+    keywords = ["BET", "RAISE", "CALL", "FOLD", "CHECK"]
+    exclude_keywords = [kw.lower() for kw in exclude_keywords]
 
     columns = []
     for col in df.columns:
         col_lower = col.lower()
-        if any(keyword.lower() in col_lower for keyword in keywords):
+        if any(keyword.lower() in col_lower for keyword in keywords) and not any(exclude in col_lower for exclude in exclude_keywords):
             columns.append(col)
     
     return columns
@@ -29,3 +34,10 @@ def drop_low_freq_rows(df):
     else:
         df = df[df["Global %"] > 1]
     return df
+
+def get_rank_action_col(action_cols,rank_cols):
+    cols = []
+    for r in rank_cols:
+        for a in action_cols:
+            cols.append(r+a)
+    return action_cols + cols

@@ -1,13 +1,11 @@
 import os
 import psycopg2
-from psycopg2 import sql
 import pandas as pd
 from typing import Union, List
 from dotenv import load_dotenv
+from sqlalchemy import create_engine, inspect
 
 #テーブルをdfとして取得する関数
-from psycopg2 import sql
-
 def get_table_data(table_name: str) -> Union[pd.DataFrame, None]:
     load_dotenv()
     
@@ -23,43 +21,23 @@ def get_table_data(table_name: str) -> Union[pd.DataFrame, None]:
     if missing_vars:
         raise ValueError(f"Missing required environment variables: {', '.join(missing_vars)}")
     
-    try:
-        conn = psycopg2.connect(
-            dbname=DB_NAME,
-            user=DB_USER,
-            password=DB_PASSWORD,
-            host=DB_HOST,
-            port=DB_PORT
-        )
-        
-        schema_name = 'public'  # 必要なら変更
-        with conn.cursor() as cur:
-            cur.execute("""
-                SELECT column_name 
-                FROM information_schema.columns 
-                WHERE table_name = %s AND table_schema = %s
-                ORDER BY ordinal_position
-            """, (table_name, schema_name))
-            
-            columns = [col[0] for col in cur.fetchall()]
-            if not columns:
-                raise ValueError(f"Table '{schema_name}.{table_name}' does not exist or has no columns.")
-            
-            query = sql.SQL("SELECT * FROM {}.{}").format(
-                sql.Identifier(schema_name),
-                sql.Identifier(table_name)
-            )
-            df = pd.read_sql_query(query.as_string(conn), conn)
-        
-        conn.close()
-        return df
-        
-    except psycopg2.Error as e:
-        print(f"Database error: {e.pgcode}, {e.pgerror}")
-        raise
-    except Exception as e:
-        print(f"Error: {e}")
-        raise
+    # SQLAlchemyエンジンを作成
+    engine_url = f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+    engine = create_engine(engine_url)
+
+    schema_name = 'public'  # 必要なら変更
+
+    # インスペクタを使用してカラム情報を取得
+    insp = inspect(engine)
+    columns = insp.get_columns(table_name, schema=schema_name)
+    
+    if not columns:
+        raise ValueError(f"Table '{schema_name}.{table_name}' does not exist or has no columns.")
+
+    # pandasでテーブル読み込み
+    df = pd.read_sql_table(table_name, con=engine, schema=schema_name)
+    
+    return df
 
 
 #テーブル名一覧を取得する関数
